@@ -2,11 +2,10 @@
 """
 This is the event processing and plotting program for F-RESP.
 
-This comment is for GitHub Practice. Please delete.
-This comment is also for GitHub Practice. Please delete.
 """
 
 import ftplib
+import csv
 from ftplib import FTP
 import tkinter as tk
 import pandas as pd
@@ -107,7 +106,16 @@ class Event:
             print('File not found.')
 
     def write_eventlog(self):
-        pass
+        csv_columns = list(self.metadict.keys())
+        csv_file = "test.csv"  # TODO: change
+        try:
+            with open(csv_file, 'a') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+#                writer.writeheader()
+                writer.writerow(self.metadict)
+
+        except IOError:
+            print("I/O error")
 
     def abc_calc(self):
         pass
@@ -140,10 +148,15 @@ def process_one_file(i):
     DL_COUNT = DL_COUNT + 1
     label_counter.configure(text=str(DL_COUNT) +
                             ' files downloaded this session')
+    Current_Event.write_eventlog()
     stream_statustxt.update()
 
 
 def start_stream():
+    """Begins file transfer stream from FTP to the preset download folder.
+    Also contains exception handler for FTP kickoff situations.
+    If FTP connects, runs process_one_file() for all detected files."""
+
     listbutton.configure(text="Streaming files...")
     try:
         linelist = ftp.nlst()
@@ -176,6 +189,7 @@ def start_stream():
             print('Reconnection Failed.')
             ftp.close()
             listbutton.configure(text="Begin FTP Stream")
+
 
 labelvar = "Test FTP Program"
 
