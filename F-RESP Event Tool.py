@@ -5,10 +5,9 @@ This is the event processing and plotting program for F-RESP.
 READABILITY THINGS IM AWARE OF:
     Names (especially method names) are ambiguous or overly similar
     Some hard coded stuff shouldn't be (options, etc)
-    tk stuff uses names I stole from an example, should fix that
     Should rename program for obvious reasons
-    Less abbreviations, this isn't a text message
     Press F8
+    Would be better if GUI process was an object
 """
 
 import ftplib
@@ -16,6 +15,7 @@ import csv
 import os
 from ftplib import FTP
 import tkinter as tk
+from tkinter import ttk
 import pandas as pd
 import numpy as np
 from bokeh.plotting import figure, show
@@ -84,7 +84,6 @@ class Event:
         try:
             init_ofslew_list = init_table['STATION_1:OFSlew'].tolist()
         except KeyError:
-            # df['DataFrame Column'] = pd.to_numeric(df['DataFrame Column'], errors='coerce')
             init_table['STATION_1:SlewRate'] = pd.to_numeric(init_table['STATION_1:SlewRate'], errors='coerce')
             repair_slewrate_list = init_table['STATION_1:SlewRate'].tolist()
             repair_of_flag_list = [i >= 0.003 for i in repair_slewrate_list]
@@ -213,7 +212,7 @@ def update_archive():
         writer.writeheader()
         for i in archive_file_list:
             file_path = ARCHIVEPATH+i
-            Load_Event.process_event(file_path)
+            Load_Event.process_event(file_path, 0)
             Load_Event.metadict['archive_index_number'] = archive_index_number
             archive_index_number = archive_index_number + 1
             writer.writerow(Load_Event.metadict)
@@ -258,32 +257,66 @@ def start_stream():
             ftp.close()
             listbutton.configure(text="Begin FTP Stream")
 
+def update_archive_tree():
+    Tree_Event = Event()
+    csv_file = "test.csv"  # TODO: change
+    try:
+        with open(csv_file, 'r') as csvfile:
+            for row in csv.DictReader(csvfile):
+                Tree_Event.metadict.update(dict(row))
+                tree.insert("", "end", text=Tree_Event.metadict['archive_index_number'])
+    except IOError:
+        print("I/O error")
+    
+        
+        
+# Initialize first event
 
-Current_Event = Event() #Program startup initialization.
+Current_Event = Event()
 Current_Event.metadict.update(read_archive_line(-1))
 print(Current_Event.metadict)
+
 
 labelvar = "Test FTP Program"
 
 root = tk.Tk()
 root.geometry('640x480')
 root.title("F-RESP Archived Recording Tool")
-frame = tk.Frame(root)
-frame.pack()
-stream_statustxt = tk.Label(root, text=labelvar)
+tab_control = ttk.Notebook(root)
+tab1 = ttk.Frame(tab_control)
+tab2 = ttk.Frame(tab_control)
+tab3 = ttk.Frame(tab_control)
+
+tab_control.add(tab1, text="Main Menu")
+tab_control.add(tab2, text="File Tree")
+tab_control.add(tab3, text="Options")
+tab_control.pack(expand=1, fill="both")
+
+
+stream_statustxt = tk.Label(tab1, text=labelvar)
 stream_statustxt.pack()
-listbutton = tk.Button(frame,
+listbutton = tk.Button(tab1,
                        text="Begin FTP stream",
                        command=start_stream)
 listbutton.pack()
-label_counter = tk.Label(root,
+label_counter = tk.Label(tab1,
                          text=str(DL_COUNT) + ' files downloaded this session')
 label_counter.pack()
-PLOTBUTTON = tk.Button(frame,
+
+
+PLOTBUTTON = tk.Button(tab2,
                        text="Quick Plot",
                        command=Current_Event.quick_plot)
 PLOTBUTTON.pack()
-archive_remake_button = tk.Button(frame,
+tree = ttk.Treeview(tab2)
+tree.pack(side='left')
+scrollbar = ttk.Scrollbar(tab2, orient="vertical", command=tree.yview)
+tree.configure(yscrollcommand=scrollbar.set)
+scrollbar.pack(side='right', fill='y')
+refreshbutton = tk.Button(tab2, text="Refresh Tree", command=update_archive_tree)
+refreshbutton.pack()
+
+archive_remake_button = tk.Button(tab3,
                                   text="Remake Archive (!Turn off FTP!!)",
                                   command=update_archive)
 archive_remake_button.pack()
