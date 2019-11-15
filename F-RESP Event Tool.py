@@ -47,7 +47,7 @@ class Event:
                 'ABC_values': [np.nan, np.nan, np.nan]
                 }
 
-    def process_event(self, file_path):
+    def process_event(self, file_path, archive_index):
         """Preloads an Event's dictionary for future sorting.
             Designed for both initial sorting and archive repair.
             Add new features here. Repair after adding.
@@ -111,6 +111,8 @@ class Event:
             self.metadict['ambig_flag'] = True
         else:
             self.metadict['ambig_flag'] = False
+            
+        self.metadict['archive_index_number'] = archive_index
 
     def quick_plot(self):
         """Generates a plot of the most recent Event instance."""
@@ -128,6 +130,7 @@ class Event:
             print('File not found.')
 
     def write_eventlog(self):
+        """Writes the metadict to a line of the metadata file."""
         csv_columns = list(self.metadict.keys())
         csv_file = "test.csv"  # TODO: change
         try:
@@ -147,7 +150,6 @@ class Event:
         pass
 
 
-Current_Event = Event() #Program startup initialization.
 
 
 def connect_to_ftp():
@@ -167,20 +169,30 @@ def process_one_file(i):
     localfile = open(file_path, 'wb')
     ftp.retrbinary('RETR '+i, localfile.write, 1024)
     localfile.close()
-    Current_Event = Event()
-    Current_Event.process_event(file_path)
+    new_index = int(Current_Event.metadict['archive_index_number']) + 1
+    #Current_Event = Event()
+    Current_Event.process_event(file_path, new_index)
     ftp.delete(i)
     global DL_COUNT
     DL_COUNT = DL_COUNT + 1
     label_counter.configure(text=str(DL_COUNT) +
                             ' files downloaded this session')
     stream_statustxt.update()
+    Current_Event.write_eventlog()
 
 
-def read_archive_line():
-    """Opens the archive metadata csv, reads a single line into an event,
-    and then closes the archive."""
-    pass
+def read_archive_line(line_num):
+    """Opens the archive metadata csv, reads a single line, RETURNS THE
+    DICTIONARY, and then closes the archive."""
+    csv_file = "test.csv"  # TODO: change
+    try:
+        with open(csv_file, 'r') as csvfile:
+            csvRowArray = []
+            for row in csv.DictReader(csvfile):
+                csvRowArray.append(row)
+        return dict(csvRowArray[line_num])
+    except IOError:
+        print("I/O error")
 
 
 def update_archive():
@@ -198,6 +210,7 @@ def update_archive():
                                 fieldnames=new_archive_columns)
         archive_file_list = os.listdir(ARCHIVEPATH)
         archive_file_list.sort()
+        writer.writeheader()
         for i in archive_file_list:
             file_path = ARCHIVEPATH+i
             Load_Event.process_event(file_path)
@@ -225,7 +238,6 @@ def start_stream():
             linelist = ftp.nlst()
             for i in linelist:
                 process_one_file(i)
-                Current_Event.write_eventlog()
             stream_statustxt.after(60000, start_stream)
         except:
             print('Reconnection Failed.')
@@ -246,6 +258,10 @@ def start_stream():
             ftp.close()
             listbutton.configure(text="Begin FTP Stream")
 
+
+Current_Event = Event() #Program startup initialization.
+Current_Event.metadict.update(read_archive_line(-1))
+print(Current_Event.metadict)
 
 labelvar = "Test FTP Program"
 
