@@ -19,6 +19,8 @@ from tkinter import ttk
 import pandas as pd
 import numpy as np
 from bokeh.plotting import figure, show
+import datetime as dt
+from dateutil.parser import parse
 
 ARCHIVEPATH = ('G:/My Drive/PGE Frequency Response/'
                'Archive/')
@@ -36,6 +38,7 @@ class Event:
     """This is the class that all recordings are sorted into"""
     metadict = {
                 'archive_index_number': int(),
+                'timestamp': dt.datetime(1970,1,1),
                 'non_event_flag': False,
                 'over_freq_flag': False,
                 'over_freq_index': np.nan,
@@ -60,13 +63,18 @@ class Event:
         # init_freq_list = init_table['STATION_1:Freq']
 
         # init_slew_list = init_table['STATION_1:SlewRate']
-
+        
+        init_time_list = init_table['Timestamp']
+        init_datetime = parse(init_time_list[0])
+        self.metadict['timestamp'] = init_datetime
+        print(self.metadict['timestamp'])
+        
         init_ofdetect_list = init_table['STATION_1:OFDetect'].tolist()
         try:
             self.metadict['over_freq_index'] = init_ofdetect_list.index(1)
             self.metadict['over_freq_flag'] = True
             self.metadict['severity_desc'] = 'Minor'
-        except ValueError:
+        except ValueError: 
             self.metadict['over_freq_index'] = np.nan
             self.metadict['over_freq_flag'] = False
             self.metadict['severity_desc'] = 'None'
@@ -169,7 +177,6 @@ def process_one_file(i):
     ftp.retrbinary('RETR '+i, localfile.write, 1024)
     localfile.close()
     new_index = int(Current_Event.metadict['archive_index_number']) + 1
-    #Current_Event = Event()
     Current_Event.process_event(file_path, new_index)
     ftp.delete(i)
     global DL_COUNT
@@ -257,6 +264,7 @@ def start_stream():
             ftp.close()
             listbutton.configure(text="Begin FTP Stream")
 
+
 def update_archive_tree():
     Tree_Event = Event()
     csv_file = "test.csv"  # TODO: change
@@ -264,12 +272,36 @@ def update_archive_tree():
         with open(csv_file, 'r') as csvfile:
             for row in csv.DictReader(csvfile):
                 Tree_Event.metadict.update(dict(row))
-                tree.insert("", "end", text=Tree_Event.metadict['archive_index_number'])
+                tree.insert("", "end",
+                            text=Tree_Event.metadict['archive_index_number'],
+                            values=("Next ver.", 
+                                    Tree_Event.metadict['over_freq_flag'],
+                                    Tree_Event.metadict['under_freq_flag'],
+                                    Tree_Event.metadict['ambig_flag'],
+                                    Tree_Event.metadict['severity_desc']))
     except IOError:
         print("I/O error")
     
-        
-        
+def test_button():
+    print(tree.item(tree.focus())['text'])
+
+def tree_plot():
+        try:
+            Plot_Event=Event()
+            Plot_Event.metadict.update(read_archive_line(int(tree.item(tree.focus())['text'])))
+            plot_table = pd.read_csv(Plot_Event.metadict['file_name'])
+            x_plot = np.linspace(0, 18000, 18000)
+            y_plot = plot_table['STATION_1:Freq']
+            plot_qp = figure(title="Current Event",
+                             x_axis_label='Time in frames',
+                             y_axis_label='Frequency (Hz)')
+            plot_qp.line(x_plot, y_plot, legend="Temp.", line_width=2)
+            show(plot_qp)
+        except FileNotFoundError:
+            print('File not found.')
+
+
+# course1_assessments.bind("<<TreeviewSelect>>", OnDoubleClick)        
 # Initialize first event
 
 Current_Event = Event()
@@ -309,13 +341,23 @@ PLOTBUTTON = tk.Button(tab2,
                        command=Current_Event.quick_plot)
 PLOTBUTTON.pack()
 tree = ttk.Treeview(tab2)
+tree['columns'] = ('datetime', 'of', 'uf', 'ambig', 'severity')
+tree.heading('#0', text='#')
+tree.heading('datetime', text='Start Time')
+tree.heading('of', text='Overfrequency')
+tree.heading('uf', text='Underfrequency')
+tree.heading('ambig', text='Ambiguous')
+tree.heading('severity', text='Severity')             
 tree.pack(side='left')
 scrollbar = ttk.Scrollbar(tab2, orient="vertical", command=tree.yview)
 tree.configure(yscrollcommand=scrollbar.set)
 scrollbar.pack(side='right', fill='y')
 refreshbutton = tk.Button(tab2, text="Refresh Tree", command=update_archive_tree)
 refreshbutton.pack()
-
+itemtestbutton = tk.Button(tab2, text="Test", command=test_button)
+itemtestbutton.pack()
+ploteventbutton = tk.Button(tab2, text="Plot Selected Event", command=tree_plot)
+ploteventbutton.pack()
 archive_remake_button = tk.Button(tab3,
                                   text="Remake Archive (!Turn off FTP!!)",
                                   command=update_archive)
