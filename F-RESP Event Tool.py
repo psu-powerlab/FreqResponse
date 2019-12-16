@@ -19,6 +19,7 @@ from tkinter import ttk
 import pandas as pd
 import numpy as np
 from bokeh.plotting import figure, show
+from bokeh.layouts import column
 import datetime as dt
 from dateutil.parser import parse
 
@@ -186,6 +187,8 @@ def process_one_file(i):
     stream_statustxt.update()
     Current_Event.write_eventlog()
 
+def repair_junk_data():
+    pass
 
 def read_archive_line(line_num):
     """Opens the archive metadata csv, reads a single line, RETURNS THE
@@ -274,7 +277,7 @@ def update_archive_tree():
                 Tree_Event.metadict.update(dict(row))
                 tree.insert("", "end",
                             text=Tree_Event.metadict['archive_index_number'],
-                            values=("Next ver.", 
+                            values=(Tree_Event.metadict['timestamp'], 
                                     Tree_Event.metadict['over_freq_flag'],
                                     Tree_Event.metadict['under_freq_flag'],
                                     Tree_Event.metadict['ambig_flag'],
@@ -289,16 +292,31 @@ def tree_plot():
         try:
             Plot_Event=Event()
             Plot_Event.metadict.update(read_archive_line(int(tree.item(tree.focus())['text'])))
-            plot_table = pd.read_csv(Plot_Event.metadict['file_name'])
-            x_plot = np.linspace(0, 18000, 18000)
-            y_plot = plot_table['STATION_1:Freq']
-            plot_qp = figure(title="Current Event",
+            plot_table = pd.read_csv(Plot_Event.metadict['file_name'], dtype={'STATION_1:SlewRate' : "float64"})
+            freq_xaxis = np.linspace(0, 18000, 18000)
+            freq_yaxis = plot_table['STATION_1:Freq']
+            plot_freq = figure(plot_width = 1800, plot_height = 400, title=Plot_Event.metadict['timestamp'],
                              x_axis_label='Time in frames',
-                             y_axis_label='Frequency (Hz)')
-            plot_qp.line(x_plot, y_plot, legend="Temp.", line_width=2)
-            show(plot_qp)
+                             y_axis_label='Frequency (Hz)',
+                             tooltips = [("index", "$index"),
+                                         ("Frequency", "$y")])
+            plot_freq.line(freq_xaxis, freq_yaxis, legend="Frequency", line_width=1)
+            slew_xaxis = np.linspace(0,18000, 18000)
+            slew_yaxis = plot_table['STATION_1:SlewRate']
+            plot_slew = figure(plot_width = 1800, plot_height = 400, 
+                             x_range=plot_freq.x_range,
+                             title=Plot_Event.metadict['timestamp'],
+                             x_axis_label='Time in frames',
+                             y_axis_label='Slew Rate',
+                             tooltips = [("index", "$index"),
+                                         ("Slew", "$y")])
+            plot_slew.line(slew_xaxis, slew_yaxis, legend="Slew Rate", line_width = 1)
+            plot_slew.line(slew_xaxis, 0)
+            
+            show(column(plot_freq, plot_slew))
         except FileNotFoundError:
             print('File not found.')
+
 
 
 # course1_assessments.bind("<<TreeviewSelect>>", OnDoubleClick)        
