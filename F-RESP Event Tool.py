@@ -37,19 +37,21 @@ DL_COUNT = 0
 
 class Event:
     """This is the class that all recordings are sorted into"""
-    metadict = {
-                'archive_index_number': int(),
-                'timestamp': dt.datetime(1970,1,1),
-                'non_event_flag': False,
-                'over_freq_flag': False,
-                'over_freq_index': np.nan,
-                'under_freq_flag': False,
-                'under_freq_index': np.nan,
-                'ambig_flag': False,
-                'severity_desc': 'None',  # Based on Slew Rate
-                'file_name': '',
-                'ABC_values': [np.nan, np.nan, np.nan]
-                }
+
+    def __init__(self):
+        self.metadict = {
+                    'archive_index_number': int(),
+                    'timestamp': dt.datetime(1970, 1, 1),
+                    'non_event_flag': False,
+                    'over_freq_flag': False,
+                    'over_freq_index': np.nan,
+                    'under_freq_flag': False,
+                    'under_freq_index': np.nan,
+                    'ambig_flag': False,
+                    'severity_desc': 'None',  # Based on Slew Rate
+                    'file_name': '',
+                    'ABC_values': [np.nan, np.nan, np.nan]
+                    }
 
     def process_event(self, file_path, archive_index):
         """Preloads an Event's dictionary for future sorting.
@@ -59,23 +61,34 @@ class Event:
 
         self.metadict['file_name'] = file_path
         print(self.metadict)
-        init_table = pd.read_csv(self.metadict['file_name'], encoding='latin_1')
+        try:
+            init_table = pd.read_csv(self.metadict['file_name'],
+                                     encoding='latin_1',
+                                     dtype={'STATION_1:SlewRate': "float64"})
+        except ValueError:
+            print('Data Type Error, Fixing...')
+            init_table = pd.read_csv(self.metadict['file_name'],
+                                     encoding='latin_1')
+            init_table['STATION_1:SlewRate'].replace(regex=True,
+                                                     inplace=True,
+                                                     to_replace=r'[^0-9.\-E]',
+                                                     value=r'')
+            init_table['STATION_1:SlewRate'] = init_table['STATION_1:SlewRate'].astype('float64')
+            init_table.to_csv(file_path, index=False)
 
         # init_freq_list = init_table['STATION_1:Freq']
 
-        # init_slew_list = init_table['STATION_1:SlewRate']
-        
         init_time_list = init_table['Timestamp']
         init_datetime = parse(init_time_list[0])
         self.metadict['timestamp'] = init_datetime
         print(self.metadict['timestamp'])
-        
+
         init_ofdetect_list = init_table['STATION_1:OFDetect'].tolist()
         try:
             self.metadict['over_freq_index'] = init_ofdetect_list.index(1)
             self.metadict['over_freq_flag'] = True
             self.metadict['severity_desc'] = 'Minor'
-        except ValueError: 
+        except ValueError:
             self.metadict['over_freq_index'] = np.nan
             self.metadict['over_freq_flag'] = False
             self.metadict['severity_desc'] = 'None'
@@ -119,7 +132,7 @@ class Event:
             self.metadict['ambig_flag'] = True
         else:
             self.metadict['ambig_flag'] = False
-            
+
         self.metadict['archive_index_number'] = archive_index
 
     def quick_plot(self):
@@ -158,8 +171,6 @@ class Event:
         pass
 
 
-
-
 def connect_to_ftp():
     """Creates an FTP object with the proper username, password, and path."""
 
@@ -187,8 +198,10 @@ def process_one_file(i):
     stream_statustxt.update()
     Current_Event.write_eventlog()
 
+
 def repair_junk_data():
     pass
+
 
 def read_archive_line(line_num):
     """Opens the archive metadata csv, reads a single line, RETURNS THE
@@ -239,32 +252,36 @@ def start_stream():
         for i in linelist:
             process_one_file(i)
         stream_statustxt.after(60000, start_stream)
-    except AttributeError:
-        print('Attempting to reconnect to FTP')
+    except AttributeError as e:
+        print(e)
+        print('Attempting to reconnect to FTP (1)')
         try:
-            ftp.close()
+            ftp.quit()
             connect_to_ftp()
             linelist = ftp.nlst()
             for i in linelist:
                 process_one_file(i)
             stream_statustxt.after(60000, start_stream)
-        except:
-            print('Reconnection Failed.')
-            ftp.close()
+        except Exception as e:
+            print(e)
+            print('Reconnection Failed. (1)')
+            ftp.quit()
             listbutton.configure(text="Begin FTP Stream")
-    except ftplib.all_errors:
-        print('Attempting to reconnect to FTP')
+    except ftplib.all_errors as e:
+        print(e)
+        print('Attempting to reconnect to FTP (2)')
         try:
-            ftp.close()
+            ftp.quit()
             connect_to_ftp()
             linelist = ftp.nlst()
             for i in linelist:
                 process_one_file(i)
                 Current_Event.write_eventlog()
             stream_statustxt.after(60000, start_stream)
-        except:
-            print('Reconnection Failed.')
-            ftp.close()
+        except Exception as e:
+            print(e)
+            print('Reconnection Failed. (2)')
+            ftp.quit()
             listbutton.configure(text="Begin FTP Stream")
 
 
@@ -277,49 +294,51 @@ def update_archive_tree():
                 Tree_Event.metadict.update(dict(row))
                 tree.insert("", "end",
                             text=Tree_Event.metadict['archive_index_number'],
-                            values=(Tree_Event.metadict['timestamp'], 
+                            values=(Tree_Event.metadict['timestamp'],
                                     Tree_Event.metadict['over_freq_flag'],
                                     Tree_Event.metadict['under_freq_flag'],
                                     Tree_Event.metadict['ambig_flag'],
                                     Tree_Event.metadict['severity_desc']))
     except IOError:
         print("I/O error")
-    
+
+
 def test_button():
     print(tree.item(tree.focus())['text'])
 
+
 def tree_plot():
-        try:
-            Plot_Event=Event()
-            Plot_Event.metadict.update(read_archive_line(int(tree.item(tree.focus())['text'])))
-            plot_table = pd.read_csv(Plot_Event.metadict['file_name'], dtype={'STATION_1:SlewRate' : "float64"})
-            freq_xaxis = np.linspace(0, 18000, 18000)
-            freq_yaxis = plot_table['STATION_1:Freq']
-            plot_freq = figure(plot_width = 1800, plot_height = 400, title=Plot_Event.metadict['timestamp'],
-                             x_axis_label='Time in frames',
-                             y_axis_label='Frequency (Hz)',
-                             tooltips = [("index", "$index"),
-                                         ("Frequency", "$y")])
-            plot_freq.line(freq_xaxis, freq_yaxis, legend="Frequency", line_width=1)
-            slew_xaxis = np.linspace(0,18000, 18000)
-            slew_yaxis = plot_table['STATION_1:SlewRate']
-            plot_slew = figure(plot_width = 1800, plot_height = 400, 
-                             x_range=plot_freq.x_range,
-                             title=Plot_Event.metadict['timestamp'],
-                             x_axis_label='Time in frames',
-                             y_axis_label='Slew Rate',
-                             tooltips = [("index", "$index"),
-                                         ("Slew", "$y")])
-            plot_slew.line(slew_xaxis, slew_yaxis, legend="Slew Rate", line_width = 1)
-            plot_slew.line(slew_xaxis, 0)
-            
-            show(column(plot_freq, plot_slew))
-        except FileNotFoundError:
-            print('File not found.')
+    try:
+        Plot_Event = Event()
+        Plot_Event.metadict.update(read_archive_line(int(tree.item(tree.focus())['text'])))
+        plot_table = pd.read_csv(Plot_Event.metadict['file_name'], dtype={'STATION_1:SlewRate' : "float64"})
+        freq_xaxis = np.linspace(0, 18000, 18000)
+        freq_yaxis = plot_table['STATION_1:Freq']
+        plot_freq = figure(plot_width=1800, plot_height=400,
+                           title=Plot_Event.metadict['timestamp'],
+                           x_axis_label='Time in frames',
+                           y_axis_label='Frequency (Hz)',
+                           tooltips=[("index", "$index"),
+                                     ("Frequency", "$y")])
+        plot_freq.line(freq_xaxis, freq_yaxis,
+                       legend="Frequency", line_width=1)
+        slew_xaxis = np.linspace(0, 18000, 18000)
+        slew_yaxis = plot_table['STATION_1:SlewRate']
+        plot_slew = figure(plot_width=1800, plot_height=400,
+                           x_range=plot_freq.x_range,
+                           title=Plot_Event.metadict['timestamp'],
+                           x_axis_label='Time in frames',
+                           y_axis_label='Slew Rate',
+                           tooltips=[("index", "$index"),
+                                     ("Slew", "$y")])
+        plot_slew.line(slew_xaxis, slew_yaxis, legend="Slew Rate", line_width=1)
+        plot_slew.line(slew_xaxis, 0)
+
+        show(column(plot_freq, plot_slew))
+    except FileNotFoundError:
+        print('File not found.')
 
 
-
-# course1_assessments.bind("<<TreeviewSelect>>", OnDoubleClick)        
 # Initialize first event
 
 Current_Event = Event()
@@ -365,7 +384,7 @@ tree.heading('datetime', text='Start Time')
 tree.heading('of', text='Overfrequency')
 tree.heading('uf', text='Underfrequency')
 tree.heading('ambig', text='Ambiguous')
-tree.heading('severity', text='Severity')             
+tree.heading('severity', text='Severity')
 tree.pack(side='left')
 scrollbar = ttk.Scrollbar(tab2, orient="vertical", command=tree.yview)
 tree.configure(yscrollcommand=scrollbar.set)
@@ -382,4 +401,5 @@ archive_remake_button = tk.Button(tab3,
 archive_remake_button.pack()
 # Main loop for window. Closes FTP on exit.
 root.mainloop()
-ftp.close()
+
+ftp.quit()
