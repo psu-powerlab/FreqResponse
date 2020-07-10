@@ -82,7 +82,7 @@ class Event:
         """
 
         self.metadict['file_name'] = file_path
-        print('test' + self.metadict)
+        print(self.metadict)
         try:
             #Attempts to read the csv into a dataframe. dtype is used to 
             #detect the garbage character issue.
