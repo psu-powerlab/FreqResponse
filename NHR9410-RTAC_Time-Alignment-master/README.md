@@ -2,7 +2,7 @@
 
 ## Credits:
 
-Thanks to Dr. Robert Bass, Sean Keene, and Mohammed Alsaid for your ultimate support.
+Thanks to Dr. Robert Bass, Sean Keene, and Mohammed Alsaid for their ultimate support.
 
 ## Purpose:
 
